@@ -1,0 +1,18 @@
+---
+- name: backup server
+  hosts: paupermc
+  remote_user: root
+  tasks:
+    - name: stop server
+      community.docker.docker_container:
+        name: paupermc
+        state: stopped
+    - name: create archive
+      ansible.builtin.shell:
+        cmd: "tar -cvpf ../paupermc-world-latest.tar world"
+        chdir: /home/paupermc/data
+    - name: download archive
+      ansible.builtin.fetch:
+        src: /home/paupermc/paupermc-world-latest.tar
+        dest: ./backups/
+        flat: yes
