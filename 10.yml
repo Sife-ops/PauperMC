@@ -1,19 +1,22 @@
+#!/usr/bin/env ansible-playbook
 ---
-- name: start server container
-  hosts: paupermc
+- name: backup server
   remote_user: root
+  hosts: paupermc
   tasks:
-    - name: start server
-      community.docker.docker_container:
-        name: paupermc
-        image: itzg/minecraft-server
-        image_name_mismatch: ignore
-        state: started
-        ports:
-          - "0.0.0.0:25565:25565"
-        volumes:
-          - "/home/paupermc/data:/data"
-        env:
-          EULA: "TRUE"
-          VERSION: "1.16.1"
-          MEMORY: 2G
+  - name: start server
+    community.docker.docker_container:
+      env:
+        EULA: 'TRUE'
+        VERSION: '{{ hostvars[inventory_hostname].paupermc_version | default(''1.16.1'') }}'
+        MEMORY: 2G
+        SEED: '{{ seed | default('''') }}'
+        ONLINE_MODE: 'FALSE'
+      image: itzg/minecraft-server
+      image_name_mismatch: ignore
+      name: paupermc
+      published_ports:
+      - 0.0.0.0:25565:25565
+      state: started
+      volumes:
+      - /root/paupermc/data:/data

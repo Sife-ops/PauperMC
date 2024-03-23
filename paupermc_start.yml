@@ -1,0 +1,4 @@
+#!/usr/bin/env ansible-playbook
+---
+- ansible.builtin.import_playbook: 00.yml
+- ansible.builtin.import_playbook: 10.yml

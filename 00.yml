@@ -1,158 +1,49 @@
+#!/usr/bin/env ansible-playbook
 ---
 - name: create/restore server
-  hosts: paupermc
   remote_user: root
-  tasks:
-    - name: configure sshd
-      ansible.builtin.blockinfile:
-        insertafter: "^#PasswordAuthentication"
-        path: "/etc/ssh/sshd_config"
-        block: |
-          PasswordAuthentication no
-          AuthenticationMethods publickey
-      register: sshd
-
-    - name: restart sshd
-      ansible.builtin.systemd_service:
-        name: sshd.service
-        state: restarted
-      when: sshd.changed
-
-    - name: populate service facts
-      ansible.builtin.service_facts:
-    - name: disable firewall
-      ansible.builtin.systemd_service:
-        name: ufw.service
-        enabled: false
-        state: stopped
-      when: ansible_facts.services['ufw.service'] is defined
-
-    - name: configure sudo
-      ansible.builtin.blockinfile:
-        path: /etc/sudoers.d/ansible-sudoers
-        block: "%sudo ALL=(ALL:ALL) NOPASSWD: ALL"
-        create: true
-        backup: yes
-
-    - name: create paupermc user
-      ansible.builtin.user:
-        name: paupermc
-        group: sudo
-        generate_ssh_key: yes
-
-    # assumes local pubkey for root has already been copied by ur provider
-    - name: install local pubkey on paupermc user
-      ansible.builtin.blockinfile:
-        path: /home/paupermc/.ssh/authorized_keys
-        block: "{{ lookup('ansible.builtin.file', lookup('ansible.builtin.env', 'HOME') + '/.ssh/id_rsa.pub') }}"
-        marker: "# {mark} LOCAL PUBKEY"
-        create: true
-        backup: yes
-
-###############################################################################
-
-    - name: check for swap
-      ansible.builtin.stat:
-        path: "/swapfile"
-      register: stat_swap
-    - name: create swapfile
-      ansible.builtin.shell:
-        # chdir: /home/paupermc/paupermc
-        cmd: "dd if=/dev/zero of=/swapfile bs=1M count=2k status=progress"
-      when: not stat_swap.stat.exists
-    - name: chmod swapfile
-      ansible.builtin.shell:
-        cmd: "chmod 0600 /swapfile"
-      when: not stat_swap.stat.exists
-    - name: make swap
-      ansible.builtin.shell:
-        cmd: "mkswap -U clear /swapfile"
-      when: not stat_swap.stat.exists
-    - name: enable swap
-      ansible.builtin.shell:
-        cmd: "swapon /swapfile"
-      when: not stat_swap.stat.exists
-    - name: add swap to fstab
-      ansible.builtin.blockinfile:
-        path: /etc/fstab
-        block: |
-          /swapfile none swap defaults 0 0
-      when: not stat_swap.stat.exists
-
-###############################################################################
-
-    # todo need 2 do this???
-    - name: update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-    - name: full system upgrade
-      ansible.builtin.apt:
-        name: "*"
-        state: latest
-    - name: install ca-certs (docker)
-      ansible.builtin.apt:
-        name: ca-certificates
-        state: present
-    - name: download docker apt keyring
-      ansible.builtin.get_url:
-        url: https://download.docker.com/linux/debian/gpg
-        dest: /etc/apt/keyrings/docker.asc
-    - name: configure docker apt repository
-      ansible.builtin.apt_repository:
-        # todo use variable for distro
-        # repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/myrepo.asc] https://download.example.com/linux/ubuntu {{ ansible_distribution_release }} stable"
-        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable"
-        state: present
-    - name: update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-    - name: install manager tools
-      ansible.builtin.apt:
-        pkg:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - tmux
-    - name: add paupermc to docker group
-      ansible.builtin.user:
-        name: paupermc
-        groups: docker
-
-###############################################################################
-
-    - name: reboot
-      ansible.builtin.set_fact:
-        reboot: True
-      when: reboot is undefined
-    - name: reboot
-      ansible.builtin.reboot:
-      when: reboot
-
-    - name: restore
-      ansible.builtin.set_fact:
-        restore: False
-      when: restore is undefined
-
-    - name: stop server
-      community.docker.docker_container:
-        name: paupermc
-        state: stopped
-      when: restore
-
-    - name: create data directory
-      ansible.builtin.file:
-        path: /home/paupermc/data
-        state: directory
-      when: restore
-
-    - name: copy world backup to server
-      ansible.builtin.copy:
-        src: ./backups/paupermc-world-latest.tar
-        dest: /home/paupermc/data/
-      when: restore
-
-    - name: uncompress world
-      ansible.builtin.shell:
-        chdir: /home/paupermc/data
-        cmd: "tar -xf paupermc-world-latest.tar"
-      when: restore
+  hosts: paupermc
+  post_tasks:
+  - name: stop server
+    when: restore | default(False)
+    community.docker.docker_container:
+      image_name_mismatch: ignore
+      name: paupermc
+      state: stopped
+  - name: create data directory
+    ansible.builtin.file:
+      path: /root/paupermc/data
+      state: directory
+  - name: copy world backup to server
+    when: restore | default(False)
+    ansible.builtin.copy:
+      dest: /root/paupermc/data/
+      src: ./backups/paupermc_world_latest.tar
+  - name: uncompress world
+    when: restore | default(False)
+    ansible.builtin.shell:
+      chdir: /root/paupermc/data
+      cmd: tar -xf paupermc_world_latest.tar
+  pre_tasks:
+  - name: configure sshd
+    register: sshd
+    ansible.builtin.blockinfile:
+      block: |-
+        PasswordAuthentication no
+        AuthenticationMethods publickey
+      insertafter: ^#PasswordAuthentication
+      path: /etc/ssh/sshd_config
+  - name: restart sshd
+    when: sshd.changed
+    ansible.builtin.systemd_service:
+      name: sshd.service
+      state: restarted
+  - ansible.builtin.service_facts: {}
+  - name: disable firewall
+    when: ansible_facts.services['ufw.service'] is defined
+    ansible.builtin.systemd_service:
+      enabled: false
+      name: ufw.service
+      state: stopped
+  roles:
+  - role: ansible-role-docker

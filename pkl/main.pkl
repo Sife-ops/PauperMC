@@ -1,0 +1,34 @@
+module main
+
+import "./playbooks.pkl"
+
+shebang = "#!/usr/bin/env ansible-playbook\n"
+dashes = "---\n"
+r = new YamlRenderer{}
+
+output {
+    files {
+
+        ["paupermc_start.yml"] {
+            text = "\(shebang)\(dashes)\(r.renderDocument(playbooks.start))"
+        }
+
+        ["paupermc_backup.yml"] {
+            text = "\(shebang)\(dashes)\(r.renderDocument(playbooks.backup))"
+        }
+
+        ["00.yml"] {
+            text = "\(shebang)\(dashes)\(r.renderDocument(playbooks.pb00))"
+        }
+
+        ["01.yml"] {
+            text = "\(shebang)\(dashes)\(r.renderDocument(playbooks.pb01))"
+        }
+
+        ["10.yml"] {
+            text = "\(shebang)\(dashes)\(r.renderDocument(playbooks.pb10))"
+        }
+
+    }
+}
+

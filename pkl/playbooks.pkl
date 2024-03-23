@@ -1,0 +1,183 @@
+module playbooks
+
+import "@ansipkl/AnsibleBuiltin.pkl" as Ab
+import "@ansipkl/CommunityGeneral.pkl" as Cg
+import "@ansipkl/CommunityDocker.pkl" as Cd
+import "@ansipkl/Playbook.pkl" as P
+
+start = P.NewPlaybook(new Listing {
+    new P.ImportPlaybook {
+        import_playbook = "00.yml"
+    }.Include()
+    new P.ImportPlaybook {
+        import_playbook = "10.yml"
+    }.Include()
+})
+
+backup = P.NewPlaybook(new Listing {
+    new P.ImportPlaybook {
+        import_playbook = "01.yml"
+    }.Include()
+    new P.ImportPlaybook {
+        import_playbook = "10.yml"
+    }.Include()
+})
+
+pb00 = P.NewPlaybook(new Listing {
+    new P.Play {
+        name = "create/restore server"
+        hosts = "paupermc"
+        remote_user = "root"
+
+        pre_tasks {
+            new Ab.Blockinfile {
+                name = "configure sshd"
+                options {
+                    path = "/etc/ssh/sshd_config"
+                    block = """
+                    PasswordAuthentication no
+                    AuthenticationMethods publickey
+                    """
+                }
+                options_mixin {
+                    // todo sus
+                    insertafter = "^#PasswordAuthentication"
+                }
+                `register` = "sshd"
+            }.Task()
+
+            new Ab.SystemdService {
+                name = "restart sshd"
+                options {
+                    name = "sshd.service"
+                    state = "restarted"
+                }
+                `when` = "sshd.changed"
+            }.Task()
+
+            new Ab.ServiceFacts {}.Task()
+
+            new Ab.SystemdService {
+                name = "disable firewall"
+                options {
+                    name = "ufw.service"
+                    enabled = false
+                    state = "stopped"
+                }
+                `when` = "ansible_facts.services['ufw.service'] is defined"
+            }.Task()
+        }
+
+        roles {
+            new P.Role {
+                role = "ansible-role-docker"
+            }
+        }
+
+        post_tasks {
+            new Cd.DockerContainer {
+                name = "stop server"
+                options {
+                    name = "paupermc"
+                    state = "stopped"
+                    image_name_mismatch = "ignore"
+                }
+                `when` = "restore | default(False)"
+            }.Task()
+
+            new Ab.File {
+                name = "create data directory"
+                options {
+                    path = "/root/paupermc/data"
+                    state = "directory"
+                }
+            }.Task()
+
+            new Ab.Copy {
+                name = "copy world backup to server"
+                options {
+                    src = "./backups/paupermc_world_latest.tar"
+                    dest = "/root/paupermc/data/"
+                }
+                `when` = "restore | default(False)"
+            }.Task()
+
+            new Ab.Shell {
+                name = "uncompress world"
+                options {
+                    chdir = "/root/paupermc/data"
+                    cmd = "tar -xf paupermc_world_latest.tar"
+                }
+                `when` = "restore | default(False)"
+            }.Task()
+        }
+    }
+})
+
+pb01 = P.NewPlaybook(new Listing {
+    new P.Play {
+        name = "backup server"
+        hosts = "paupermc"
+        remote_user = "root"
+
+        tasks {
+            new Cd.DockerContainer {
+                name = "stop server"
+                options {
+                    name = "paupermc"
+                    state = "stopped"
+                }
+            }.Task()
+
+            new Ab.Shell {
+                name = "create archive"
+                options {
+                    chdir = "/root/paupermc/data"
+                    cmd = "tar -cvpf ../paupermc_world_latest.tar world"
+                }
+            }.Task()
+
+            new Ab.Fetch {
+                name = "download archive"
+                options {
+                    src = "/root/paupermc/paupermc_world_latest.tar"
+                    dest = "./backups/"
+                    flat = true
+                }
+            }.Task()
+        }
+    }
+})
+
+pb10 = P.NewPlaybook(new Listing {
+    new P.Play {
+        name = "backup server"
+        hosts = "paupermc"
+        remote_user = "root"
+
+        tasks {
+            new Cd.DockerContainer {
+                name = "start server"
+                options {
+                    name = "paupermc"
+                    image = "itzg/minecraft-server"
+                    image_name_mismatch = "ignore"
+                    state = "started"
+                    published_ports {
+                        "0.0.0.0:25565:25565"
+                    }
+                    volumes {
+                        "/root/paupermc/data:/data"
+                    }
+                    env {
+                        EULA = "TRUE"
+                        VERSION = "{{ hostvars[inventory_hostname].paupermc_version | default('1.16.1') }}"
+                        MEMORY = "2G"
+                        SEED = "{{ seed | default('') }}"
+                        ONLINE_MODE = "FALSE"
+                    }
+                }
+            }.Task()
+        }
+    }
+})
