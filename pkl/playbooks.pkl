@@ -70,21 +70,11 @@ pb00 = P.NewPlaybook(new Listing {
 
         roles {
             new P.Role {
-                role = "ansible-role-docker"
+                role = "ansible_role_docker"
             }
         }
 
         post_tasks {
-            new Cd.DockerContainer {
-                name = "stop server"
-                options {
-                    name = "paupermc"
-                    state = "stopped"
-                    image_name_mismatch = "ignore"
-                }
-                `when` = "restore | default(False)"
-            }.Task()
-
             new Ab.File {
                 name = "create data directory"
                 options {
@@ -93,23 +83,35 @@ pb00 = P.NewPlaybook(new Listing {
                 }
             }.Task()
 
-            new Ab.Copy {
-                name = "copy world backup to server"
-                options {
-                    src = "./backups/paupermc_world_latest.tar"
-                    dest = "/root/paupermc/data/"
-                }
+            new P.Block {
                 `when` = "restore | default(False)"
-            }.Task()
+                block {
+                    new Cd.DockerContainer {
+                        name = "stop server"
+                        options {
+                            name = "paupermc"
+                            state = "stopped"
+                            image_name_mismatch = "ignore"
+                        }
+                    }.Task()
 
-            new Ab.Shell {
-                name = "uncompress world"
-                options {
-                    chdir = "/root/paupermc/data"
-                    cmd = "tar -xf paupermc_world_latest.tar"
+                    new Ab.Copy {
+                        name = "copy world backup to server"
+                        options {
+                            src = "./backups/paupermc_world_latest.tar"
+                            dest = "/root/paupermc/data/"
+                        }
+                    }.Task()
+
+                    new Ab.Shell {
+                        name = "uncompress world"
+                        options {
+                            chdir = "/root/paupermc/data"
+                            cmd = "tar -xf paupermc_world_latest.tar"
+                        }
+                    }.Task()
                 }
-                `when` = "restore | default(False)"
-            }.Task()
+            }
         }
     }
 })
@@ -171,9 +173,9 @@ pb10 = P.NewPlaybook(new Listing {
                     }
                     env {
                         EULA = "TRUE"
-                        VERSION = "{{ hostvars[inventory_hostname].paupermc_version | default('1.16.1') }}"
+                        VERSION = "{{ hostvars[inventory_hostname].mc_version | default('1.16.1') }}"
                         MEMORY = "2G"
-                        SEED = "{{ seed | default('') }}"
+                        SEED = "{{ hostvars[inventory_hostname].seed | default('') }}"
                         ONLINE_MODE = "FALSE"
                     }
                 }

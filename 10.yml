@@ -8,9 +8,9 @@
     community.docker.docker_container:
       env:
         EULA: 'TRUE'
-        VERSION: '{{ hostvars[inventory_hostname].paupermc_version | default(''1.16.1'') }}'
+        VERSION: '{{ hostvars[inventory_hostname].mc_version | default(''1.16.1'') }}'
         MEMORY: 2G
-        SEED: '{{ seed | default('''') }}'
+        SEED: '{{ hostvars[inventory_hostname].seed | default('''') }}'
         ONLINE_MODE: 'FALSE'
       image: itzg/minecraft-server
       image_name_mismatch: ignore

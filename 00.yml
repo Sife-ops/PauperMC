@@ -4,26 +4,25 @@
   remote_user: root
   hosts: paupermc
   post_tasks:
-  - name: stop server
-    when: restore | default(False)
-    community.docker.docker_container:
-      image_name_mismatch: ignore
-      name: paupermc
-      state: stopped
   - name: create data directory
     ansible.builtin.file:
       path: /root/paupermc/data
       state: directory
-  - name: copy world backup to server
+  - block:
+    - name: stop server
+      community.docker.docker_container:
+        image_name_mismatch: ignore
+        name: paupermc
+        state: stopped
+    - name: copy world backup to server
+      ansible.builtin.copy:
+        dest: /root/paupermc/data/
+        src: ./backups/paupermc_world_latest.tar
+    - name: uncompress world
+      ansible.builtin.shell:
+        chdir: /root/paupermc/data
+        cmd: tar -xf paupermc_world_latest.tar
     when: restore | default(False)
-    ansible.builtin.copy:
-      dest: /root/paupermc/data/
-      src: ./backups/paupermc_world_latest.tar
-  - name: uncompress world
-    when: restore | default(False)
-    ansible.builtin.shell:
-      chdir: /root/paupermc/data
-      cmd: tar -xf paupermc_world_latest.tar
   pre_tasks:
   - name: configure sshd
     register: sshd
@@ -46,4 +45,4 @@
       name: ufw.service
       state: stopped
   roles:
-  - role: ansible-role-docker
+  - role: ansible_role_docker

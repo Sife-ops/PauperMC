@@ -6,5 +6,6 @@ local:
 
 paupermc:
   hosts:
-    "108.61.84.6":
+    "149.28.38.52":
       # paupermc_version: "1.16.1"
+      # seed:
