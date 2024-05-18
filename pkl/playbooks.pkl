@@ -86,14 +86,15 @@ pb00 = P.NewPlaybook(new Listing {
             new P.Block {
                 `when` = "restore | default(False)"
                 block {
-                    new Cd.DockerContainer {
-                        name = "stop server"
-                        options {
-                            name = "paupermc"
-                            state = "stopped"
-                            image_name_mismatch = "ignore"
-                        }
-                    }.Task()
+                    // todo stop if running
+                    // new Cd.DockerContainer {
+                    //     name = "stop server"
+                    //     options {
+                    //         name = "paupermc"
+                    //         state = "stopped"
+                    //         image_name_mismatch = "ignore"
+                    //     }
+                    // }.Task()
 
                     new Ab.Copy {
                         name = "copy world backup to server"
@@ -153,7 +154,7 @@ pb01 = P.NewPlaybook(new Listing {
 
 pb10 = P.NewPlaybook(new Listing {
     new P.Play {
-        name = "backup server"
+        name = "start server"
         hosts = "paupermc"
         remote_user = "root"
 
@@ -177,6 +178,7 @@ pb10 = P.NewPlaybook(new Listing {
                         MEMORY = "2G"
                         SEED = "{{ hostvars[inventory_hostname].seed | default('') }}"
                         ONLINE_MODE = "FALSE"
+                        SPAWN_PROTECTION = "0"
                     }
                 }
             }.Task()

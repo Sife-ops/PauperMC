@@ -9,11 +9,6 @@
       path: /root/paupermc/data
       state: directory
   - block:
-    - name: stop server
-      community.docker.docker_container:
-        image_name_mismatch: ignore
-        name: paupermc
-        state: stopped
     - name: copy world backup to server
       ansible.builtin.copy:
         dest: /root/paupermc/data/

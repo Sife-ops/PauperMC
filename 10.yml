@@ -1,6 +1,6 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: backup server
+- name: start server
   remote_user: root
   hosts: paupermc
   tasks:
@@ -12,6 +12,7 @@
         MEMORY: 2G
         SEED: '{{ hostvars[inventory_hostname].seed | default('''') }}'
         ONLINE_MODE: 'FALSE'
+        SPAWN_PROTECTION: '0'
       image: itzg/minecraft-server
       image_name_mismatch: ignore
       name: paupermc
